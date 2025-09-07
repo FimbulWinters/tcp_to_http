@@ -29,30 +29,37 @@ func main() {
 }
 
 func getLinesChannel(f io.ReadCloser) <-chan string {
-	fileChan := make(chan string)
+	lines := make(chan string)
+
 	go func() {
 		defer f.Close()
-		defer close(fileChan)
-		fileData := make([]byte, 8)
-		currentLine := ""
+		defer close(lines)
+
+		buf := make([]byte, 8)
+		var pending string
+
 		for {
-			data, err := f.Read(fileData)
-			if data > 0 {
-				currentLine += string(fileData[:data])
-				split := strings.Split(currentLine, "\n")
-				if len(split) > 1 {
-					part := strings.Join(split[:len(split)-1], " ")
-					fileChan <- part
-					currentLine = split[len(split)-1]
+			n, err := f.Read(buf)
+			if n > 0 {
+				chunk := string(buf[:n])
+				parts := strings.Split(chunk, "\n")
+
+				for i := 0; i < len(parts)-1; i++ {
+					lines <- pending + parts[i]
+					pending = ""
 				}
+				pending += parts[len(parts)-1]
 			}
+
 			if err != nil {
-				if err == io.EOF {
-					break
+				if pending != "" {
+					lines <- pending
 				}
+
+				break
 			}
 		}
 	}()
 
-	return fileChan
+	return lines
 }
