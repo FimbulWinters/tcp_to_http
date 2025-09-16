@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
-	"strings"
+
+	"github.com/FimbulWinters/tcp_to_http/internal/request"
 )
 
 func main() {
@@ -20,46 +20,13 @@ func main() {
 			fmt.Println(err)
 		}
 		fmt.Println("connection accepted")
-		fileChan := getLinesChannel(connection)
-		for line := range fileChan {
-			fmt.Println("read:", line)
+
+		fileChan, err := request.RequestFromReader(connection)
+		if err != nil {
+			fmt.Println(err)
 		}
+
+		fmt.Printf("Request line: \n - Method: %s\n - Target: %s\n - Version: %s", fileChan.RequestLine.Method, fileChan.RequestLine.RequestTarget, fileChan.RequestLine.HttpVersion)
 
 	}
-}
-
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	lines := make(chan string)
-
-	go func() {
-		defer f.Close()
-		defer close(lines)
-
-		buf := make([]byte, 8)
-		var pending string
-
-		for {
-			n, err := f.Read(buf)
-			if n > 0 {
-				chunk := string(buf[:n])
-				parts := strings.Split(chunk, "\n")
-
-				for i := 0; i < len(parts)-1; i++ {
-					lines <- pending + parts[i]
-					pending = ""
-				}
-				pending += parts[len(parts)-1]
-			}
-
-			if err != nil {
-				if pending != "" {
-					lines <- pending
-				}
-
-				break
-			}
-		}
-	}()
-
-	return lines
 }
